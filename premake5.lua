@@ -169,6 +169,7 @@ include("tests/SM_API_test/premake5.lua")
 include("tests/prog_test/premake5.lua")
 include("source/SmPyDevLib/premake5.lua")
 include("source/SmPyLib/premake5_tests.lua")
+include("source/SmPyCore/premake5.lua")
 
 local function include_usd_dependent_stack()
     include("source/BREP_USD_DATA/premake5.lua")

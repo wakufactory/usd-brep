@@ -73,6 +73,9 @@ See `tools/smlib_gui/README.md` for smoke-test and troubleshooting commands.
 
 Runnable compositions organized by API layer live under [Examples](Examples/README.md).
 
+The USD-free `_smlib_core` binding used by the adjacent local modeler is documented
+in [the tool boundary API reference](docs/smlib-core-tool-api.md) (Japanese).
+
 ## macOS local development
 
 Apple Silicon only: `./repo.sh build -p macos-universal`. Build symlinks host Packman Python into `_build/target-deps/python` when available (`SMLIB_PYTHON_ROOT` to override).

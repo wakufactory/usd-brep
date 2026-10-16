@@ -4,6 +4,7 @@
 #include "StdAfx.h"
 
 #include "SmApiImportExport.h"
+#include "SmApiGeneral.h"
 
 #include <SmBrep.h>
 #include <SmBrepData.h>
