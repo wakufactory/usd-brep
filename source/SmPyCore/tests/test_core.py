@@ -10,6 +10,17 @@ except ImportError:
 
 @unittest.skipIf(sm is None, "_smlib_core has not been built")
 class CoreBindingTests(unittest.TestCase):
+    def test_offset_shell_keep_source_alive(self):
+        body = sm.create_box((0, 0, 0), 10, 10, 10)
+        before = sm.tessellate(body).to_numpy_arrays()
+        faces = sm.face_info(body)
+        self.assertEqual(len(faces), 6)
+        for result in (sm.offset_brep(body, 1), sm.shell_brep(body, -1, faces_to_shell=[1])):
+            self.assertTrue(result.valid)
+            self.assertIsNot(result, body)
+        self.assertTrue(body.valid)
+        self.assertEqual(sm.tessellate(body).to_numpy_arrays(), before)
+
     def test_profile_is_reusable_and_returns_a_copy(self):
         vertices = [(0, 0), (0, 3), (2, 3), (2, 0), (0, 0)]
         profile = sm.create_profile(vertices)

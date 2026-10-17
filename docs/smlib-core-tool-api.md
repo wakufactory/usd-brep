@@ -3,17 +3,18 @@
 
 # ローカルモデラ向け `_smlib_core` とツール境界 API
 
-この文書は、2026-10-16 時点の作業ツリーで追加した USD 非依存の Python 拡張と、隣接する `cad` ローカルモデラとの接続契約を記録する。対象は `source/SmPyCore/`、`premake5.lua`、`source/SM_API/src/SmApiImportExport.cpp` の変更である。以下の仕様は実装済みの `_smlib_core` に基づく。既存の `_omni_solid`、USD スキーマ、USD ファイル形式の仕様を変更するものではない。
+この文書は USD 非依存の Python 拡張 `_smlib_core` と、隣接する `cad` ローカルモデラとの現行の接続契約を記録する。以下の仕様は実装に基づく。既存の `_omni_solid`、USD スキーマ、USD ファイル形式の仕様は対象外とする。
 
-## 今回の修正
+## 実装箇所
 
 | ファイル | 変更内容 | 目的 |
 | --- | --- | --- |
-| `source/SmPyCore/src/SmPyCore.cpp` | pybind11 モジュール `_smlib_core` を追加。プリミティブ生成、Boolean、全エッジの面取り・丸め、テッセレーション、メッシュ配列化を `SM_API` に接続 | ローカルツールに必要なモデリング機能を USD なしで利用する |
+| `source/SmPyCore/src/SmPyCore.cpp` | pybind11 モジュール `_smlib_core` にプリミティブ生成、Boolean、全エッジ加工、オフセット、シェル、面情報、テッセレーションなどを公開 | ローカルツールに必要なモデリング機能を USD なしで利用する |
 | `source/SmPyCore/stubs/_smlib_core.pyi` | Python の公開名、引数、戻り値の型を記述 | ツール側の補完と静的参照 |
-| `source/SmPyCore/tests/test_core.py` | 箱のテッセレーションと Boolean の消費契約を確認 | 最小限の境界動作を確認 |
+| `source/SmPyCore/tests/test_core.py` | テッセレーション、Boolean の消費契約、オフセット・シェル後の元形状の保持を確認 | ネイティブ境界の基本動作を確認 |
 | `source/SmPyCore/premake5.lua`、`premake5.lua` | `SMLib` と `SM_API` にリンクする Python 3.12 拡張を通常のプロジェクトに追加 | macOS の USD 未導入構成でもプロジェクトを生成できるようにする |
 | `source/SM_API/src/SmApiImportExport.cpp` | `SmApiGetOrCreateContext()` の宣言元 `SmApiGeneral.h` を明示的に include | 単独ビルドでの宣言依存を解消 |
+| `cad/modeler.py`、`cad/README.md` | `faces`、`offset`、`shell` 命令と利用例を追加 | 面を確認し、開口面を選んでモデリングする |
 
 `_smlib_core` は Python 3.12 と pybind11 を使い、`SMLib` / `SM_API` に依存する。`SM_API_USD`、`pxr`、OCCT にはリンクしない。リポジトリの Premake 定義は `_smlib_core` を USD 依存スタックの外で include する。隣接ツール `cad/Makefile` は Apple Silicon 向けに同じソースを直接コンパイルし、単一の `.so` にリンクする別のビルド経路である。
 
@@ -59,6 +60,10 @@ flowchart LR
 | `create_revolve` | `profile, origin, start_angle_deg, end_angle_deg` | `axis=None, xdir=None` | 全回転または端面を閉じた部分回転 `Brep` |
 | `boolean_union` / `boolean_difference` / `boolean_intersection` | `a, b` | — | `a` と同じ `Brep` ハンドル。`b` を消費 |
 | `chamfer_fillet` / `circular_fillet` | `brep, radius` | — | 入力と同じ `Brep` ハンドルを変更して返す |
+| `offset_brep` | `brep, distance` | keyword-only: `extended_offset=True, self_intersection=True` | 入力を保持し、新しいオフセット `Brep` |
+| `shell_brep` | `brep, distance` | keyword-only: `faces_to_shell=(), extended_offset=True, self_intersection=True, create_solid=True` | 入力を保持し、新しい壁の `Brep` |
+| `face_info` | `brep` | — | `[{"index": int, "bounds": ((xmin,ymin,zmin),(xmax,ymax,zmax))}, ...]` |
+| `transform_brep` | `brep, scale, euler, position` | — | 入力を変更して同じ `Brep` を返す |
 | `tessellate` | `brep` | `chord_height_tolerance=0.0`, `curve_angle_tolerance_deg=25.0`, `surface_angle_tolerance_deg=25.0` | `PolyBrep` または `None` |
 
 `Brep.valid` はハンドルが未消費なら `True`。`PolyBrep.to_numpy_arrays()` は名前に反して **NumPy 配列ではなく Python の list を含む dict** を返す。型スタブの詳細は `source/SmPyCore/stubs/_smlib_core.pyi` を参照する。
@@ -80,8 +85,27 @@ flowchart LR
 
 - 生成関数は新しい `Brep` を返す。Boolean の成功時は `a` をその場で変更して同じハンドルを返し、`b.valid` は `False` になる。消費済み `b` を再利用すると `ValueError`。同一ハンドルを両入力に渡すことも `ValueError`。
 - Boolean の失敗時は C++ API の契約に従い、両入力は解放されないが、形状が変更されている可能性がある。失敗後に元形状が保たれていると仮定しない。
-- 面取り・丸めは入力をその場で変更し、同じハンドルを返す。`tessellate` は入力形状を論理的には変更せず、新しい `PolyBrep` を返す。
+- 面取り・丸め・`transform_brep` は入力をその場で変更し、同じハンドルを返す。`tessellate` は入力形状を論理的には変更せず、新しい `PolyBrep` を返す。
 - 形状パラメータの検査と消費済みハンドルは `ValueError`、`SM_API` の失敗は操作名と数値ステータスを含む `RuntimeError`。返却ポインタが null の場合も `RuntimeError`。テッセレーションが成功ステータスで null を返した場合は `None`。
+
+### オフセット・シェルの境界仕様
+
+`distance` は有限な非ゼロ値で、正は外側、負は内側です。`offset_brep` は `SmApiOffsetBrepFull`、`shell_brep` は `SmApiShellBrepFull` を呼びます。どちらも新しい所有ハンドルを返し、入力形状を消費しません。オフセットは形状全体の面をずらし、シェルは元の境界とオフセットした境界の間に壁を作ります。シェルは面を指定しない場合に閉じた壁、面を指定した場合にその部分を開口とする壁を作ります。
+
+`faces_to_shell` は `Face` ハンドルではなく、`face_info(brep)` と同じ `GetFaces()` 順の0始まり整数インデックスです。負数・範囲外・重複を `ValueError` にします。入力BRepから面ポインタを解決したうえで、入力を複製して処理する既存のシェルAPIへ渡します。`face_info` の各範囲は `SmApiFaceBoundingBox(..., TRUE, ...)` による座標範囲です。形状加工で面の順序は変わり得るため、加工後の BRep に使う番号は再取得します。幾何学的に不可能な加工の失敗は `RuntimeError` として返します。
+
+テキスト層は `offset 名前 距離` / `shell 名前 厚み [面番号 ...]` で同名の結果へ置換し、材質とグループ所属を保持します。`faces 名前` の一覧は評価ログへ返します。Python層は元の形状も引き続き利用できます。
+
+```python
+body = sm.create_box((0, 0, 0), 10, 10, 10)
+top = next(face["index"] for face in sm.face_info(body)
+           if face["bounds"][0][2] == face["bounds"][1][2] == 10)
+expanded = sm.offset_brep(body, 1)
+cup = sm.shell_brep(body, -1, faces_to_shell=[top])
+assert body.valid and expanded.valid and cup.valid
+```
+
+上の `top` は加工前の箱の上面を座標で選んでいる。`_smlib_core` の面番号契約は `_omni_solid.shell_brep` の `Face` ハンドル列と異なる。`extended_offset` と `self_intersection` は両関数の keyword-only 引数で、`create_solid` はシェルの sheet body 入力で開いた端を結ぶ設定である。テキスト命令はこれらの既定値を使う。厚みが局所寸法に対して大きいなど、処理が成立しない形状ではカーネルエラーになり得る。
 
 ### メッシュ配列の契約
 

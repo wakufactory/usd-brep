@@ -504,6 +504,52 @@ Brep circular_fillet(const Brep& brep, double radius)
     return brep;
 }
 
+py::list face_info(const Brep& brep)
+{
+    SmTArray<SmFace*> faces;
+    brep->get()->GetFaces(faces);
+    py::list result;
+    for (ULONG i = 0; i < faces.GetSize(); ++i)
+    {
+        SmPoint3d low, high;
+        check(SmApiFaceBoundingBox(faces[i], TRUE, low, high), "SmApiFaceBoundingBox");
+        py::dict item;
+        item["index"] = i;
+        item["bounds"] = py::make_tuple(py::make_tuple(low.x, low.y, low.z),
+                                         py::make_tuple(high.x, high.y, high.z));
+        result.append(item);
+    }
+    return result;
+}
+
+Brep offset_or_shell(const Brep& brep, double distance, bool extended, bool self_intersection,
+                     bool shell, bool create_solid, const std::vector<int>& indices)
+{
+    if (!std::isfinite(distance) || distance == 0.0)
+        throw py::value_error("distance must be finite and nonzero");
+    SmBrep* source = brep->get();
+    SmTArray<SmFace*> faces;
+    source->GetFaces(faces);
+    SmTArray<const SmFace*> selected;
+    std::vector<int> seen;
+    for (int index : indices)
+    {
+        if (index < 0 || static_cast<ULONG>(index) >= faces.GetSize())
+            throw py::value_error("face index out of range; inspect face_info(brep)");
+        if (std::find(seen.begin(), seen.end(), index) != seen.end())
+            throw py::value_error("duplicate face index");
+        seen.push_back(index);
+        selected.Add(faces[index]);
+    }
+    SmBrep* raw = nullptr;
+    const SmApiStatus status = shell
+        ? SmApiShellBrepFull(source, distance, extended, self_intersection, create_solid, selected, raw)
+        : SmApiOffsetBrepFull(source, distance, extended, self_intersection, raw);
+    std::unique_ptr<SmBrep> result(raw);
+    check(status, shell ? "SmApiShellBrepFull" : "SmApiOffsetBrepFull");
+    return std::make_shared<BrepHandle>(result.release());
+}
+
 Brep transform_brep(const Brep& brep, py::tuple scale, py::tuple euler, py::tuple position)
 {
     const SmVector3d factors = vector3(scale);
@@ -720,6 +766,25 @@ PYBIND11_MODULE(_smlib_core, module)
                "Chamfer all eligible edges in place and return the Brep. Width is measured across the chamfer face.\n\nWraps: SmApiChamferFillet");
     module.def("circular_fillet", &circular_fillet, py::arg("brep"), py::arg("radius"),
                "Round all eligible edges in place and return the Brep.\n\nWraps: SmApiCircularFillet");
+    module.def("face_info", &face_info, py::arg("brep"),
+               "Return current zero-based face indices and bounding boxes. Indices may change after modeling.\n\n"
+               "Wraps: SmApiFaceBoundingBox");
+    module.def("offset_brep", [](const Brep& brep, double distance, bool extended, bool self_int) {
+        return offset_or_shell(brep, distance, extended, self_int, false, true, {});
+    }, py::arg("brep"), py::arg("distance"), py::kw_only(),
+       py::arg("extended_offset") = true, py::arg("self_intersection") = true,
+       "Pure: returns new Brep; input unchanged. Nonzero distance: positive outward, negative inward.\n\n"
+       "Wraps: SmApiOffsetBrepFull");
+    module.def("shell_brep", [](const Brep& brep, double distance, const std::vector<int>& faces,
+                                bool extended, bool self_int, bool create_solid) {
+        return offset_or_shell(brep, distance, extended, self_int, true, create_solid, faces);
+    }, py::arg("brep"), py::arg("distance"), py::kw_only(),
+       py::arg("faces_to_shell") = std::vector<int>(), py::arg("extended_offset") = true,
+       py::arg("self_intersection") = true, py::arg("create_solid") = true,
+       "Pure: returns new Brep; input unchanged. Positive thickness outward, negative inward.\n"
+       "faces_to_shell contains current zero-based integer indices from face_info, not Face handles.\n"
+       "Empty selection creates a closed wall. For sheet inputs create_solid joins lamina edges.\n\n"
+       "Wraps: SmApiShellBrepFull");
     module.def("transform_brep", &transform_brep, py::arg("brep"), py::arg("scale"),
                py::arg("euler"), py::arg("position"),
                "Mutate a Brep using local scale, X/Y/Z Euler degrees, then parent-space translation.\n\n"
