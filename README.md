@@ -2,6 +2,18 @@
 
 Standalone Omniverse repo containing USD BRep (NURBS boundary-representation solid modeling) libraries.
 
+## Build on macOS (Apple Silicon)
+
+Install Git LFS and the Xcode Command Line Tools. The repository build also needs the macOS Premake package specified in `deps/host-deps.packman.xml`; it is not available from the public Packman server, so a user-level Packman source providing that package is required. Run the following from this repository's root:
+
+```bash
+./prebuild.sh -p macos-universal
+./repo.sh build -p macos-universal -j10
+./tests.sh macos-universal
+```
+
+`prebuild.sh` stages the omniSolid schema plugin resources. The default macOS build contains the kernel and USD-free Python components. To build the USD/OCCT stack, stage a compatible local OpenUSD first; see [macOS local development](#macos-local-development). The adjacent `cad` modeler uses a separate direct `make` build and does not require Premake or OpenUSD; see [its setup instructions](../README.md#ローカルモデラをビルドして起動するapple-silicon).
+
 ## Requirements
 
 - [**Git**](https://git-scm.com/downloads) and [**Git LFS**](https://git-lfs.com/): Git LFS is required for the large binary fixtures tracked in `.gitattributes` (USD assets, STEP/IGES/JT models).
