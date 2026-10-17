@@ -24,6 +24,7 @@
 // TestSmBreps
 API_EXPORT SmStatus TestSmBoolean();
 API_EXPORT SmStatus TestSmBooleanBoundsExample();
+API_EXPORT SmStatus TestSmTessellationPoleNormals();
 API_EXPORT SmStatus TestSmMassProperties();
 API_EXPORT SmStatus TestSmPrecisePropertySelection();
 API_EXPORT SmStatus TestSmBrepDistance();

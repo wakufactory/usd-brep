@@ -8,6 +8,26 @@
 
 ## Overview
 
+### Directional normals at surface poles
+
+`SmTess` computes pole normals while emitting each polygon, using the UV
+approach direction of its non-pole corners. Periodic UV seams are unwrapped
+before averaging. This handles cone tips where a single 3D point has multiple
+limiting normals. PolyBrep output stores these in edge-owned
+`SmPolyVertAuxData`; use corner normals rather than a vertex/source-face
+average to preserve them. No whole-mesh correction pass is required.
+
+Callback polygon output uses the same calculation. Indexed triangle meshes
+duplicate only the affected pole entries, keeping their 3D positions equal.
+When generating normals, surfaces with poles fall back from strips/fans to
+individual polygons so a shared fan center cannot erase directional normals.
+Non-pole surfaces retain their normal output batching.
+
+The native regression is
+`tests/SM_API_test/src/TestSmTessellationPoleNormals.cpp`, registered in
+`SM_API_test_app`. The adjacent local modeler can also run this exact test
+without Python bindings using `make test-pole-normals` from `cad/`.
+
 Tessellation converts exact BRep geometry (NURBS surfaces) into polygon meshes (`SmPolyBrep` / Python `PolyBrep`) for rendering, export, or polygon-based operations. The tessellation algorithm subdivides each face into triangles that approximate the underlying surface within specified tolerances.
 
 The output is a **`PolyBrep`** — use it with **[polygon booleans](polygon_booleans.md)**, **[USD mesh I/O](usd_import_export.md)**, or the inspection helpers in **[polybrep](polybrep.md)**.

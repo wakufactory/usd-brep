@@ -644,6 +644,12 @@ py::dict mesh_arrays(const PolyHandle& handle)
                     break;
                 }
             }
+            // Edge-owned data is face-varying even at a shared surface pole.
+            // A vertex/source-face normal alone cannot represent a cone tip.
+            if (const SmPolyVertAuxData* aux = edges[j]->GetAuxData())
+                if (std::isfinite(aux->m_vNormal.x) && std::isfinite(aux->m_vNormal.y)
+                    && std::isfinite(aux->m_vNormal.z) && aux->m_vNormal.Length() > 1e-12)
+                    normal = aux->m_vNormal;
             const double length = normal.Length();
             if (length > 1e-12)
                 polygon_normals.append(py::make_tuple(normal.x / length, normal.y / length, normal.z / length));

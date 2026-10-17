@@ -31,6 +31,7 @@
 #include <atomic>
 #include <unordered_set>
 #include <iterator>
+#include <cmath>
 
 #ifdef SM_USE_TBB
 #include "tbb/parallel_for.h"
@@ -6491,6 +6492,116 @@ NOTES: good for aggregating several pFace tessellations into one SmPolyBrep
                control of the feature to the caller.
 
 ***********************************************************************/
+namespace
+{
+// Keep reusable UV-vertex data alive until all polygons have been built.
+// Replacing an edge's pole normal must not delete another polygon's source.
+struct SmTessAuxDataGuard
+{
+    SmTArray<SmPolyVertAuxData*> data;
+    void Keep(SmPolyVertAuxData* value) { value->AddUser(); data.Add(value); }
+    ~SmTessAuxDataGuard()
+    {
+        for (ULONG i = 0; i < data.GetSize(); ++i)
+            data[i]->RemoveUser();
+    }
+};
+
+// Pole normals depend on the polygon's approach direction. Keep this local
+// to tessellation output: neither a surface point nor a shared vertex can
+// supply the missing direction. Used by PolyBrep and callback output alike.
+class SmTessPoleNormals
+{
+    SmSurface* m_surface;
+    ULONG m_mask;
+    SmTArray<SmPoint3d> m_poles;
+    SmExtent2d m_domain;
+    SmBoolean m_periodicU, m_periodicV;
+    double m_tolerance;
+
+public:
+    explicit SmTessPoleNormals(SmFace* face)
+        : m_surface(face->GetSurface()), m_mask(0), m_periodicU(FALSE), m_periodicV(FALSE),
+          m_tolerance(smos_Max(face->GetBrep()->GetTolerance() / 100.0, 1e-12))
+    {
+        m_mask = m_surface->GetSingularities(&m_poles);
+        if (m_mask)
+        {
+            m_domain = m_surface->GetNaturalUVDomain();
+            m_periodicU = m_surface->IsPeriodic(m_domain, SM_SP_U);
+            m_periodicV = m_surface->IsPeriodic(m_domain, SM_SP_V);
+        }
+    }
+
+    SmBoolean HasPoles() const { return m_mask != 0; }
+
+    void Apply(ULONG count, const SmPoint3d* points, const SmPoint2d* uvs, SmVector3d* normals) const
+    {
+        if (!m_mask || count < 3)
+            return;
+        SmVector3d flat(0, 0, 0);
+        for (ULONG i = 1; i + 1 < count; ++i)
+            flat += (points[i] - points[0]) * (points[i + 1] - points[0]);
+        if (flat.Length() == 0.0)
+            return;
+        flat *= 1.0 / flat.Length();
+        const SmPoint2d low = m_domain.GetMin(), high = m_domain.GetMax();
+        for (ULONG side = 0; side < 4 && side < m_poles.GetSize(); ++side)
+        {
+            if (!(m_mask & (1UL << side)))
+                continue;
+            SmBoolean touchesPole = FALSE;
+            for (ULONG i = 0; i < count; ++i)
+                touchesPole |= points[i].DistanceBetween(m_poles[side]) <= m_tolerance;
+            if (!touchesPole)
+                continue;
+            SmPoint2d anchor, uv(0, 0);
+            ULONG samples = 0;
+            for (ULONG i = 0; i < count; ++i)
+            {
+                if (points[i].DistanceBetween(m_poles[side]) <= m_tolerance)
+                    continue;
+                SmPoint2d sample = uvs[i];
+                if (!samples)
+                    anchor = sample;
+                if (m_periodicU && high.x > low.x)
+                    sample.x = anchor.x + std::remainder(sample.x - anchor.x, high.x - low.x);
+                if (m_periodicV && high.y > low.y)
+                    sample.y = anchor.y + std::remainder(sample.y - anchor.y, high.y - low.y);
+                uv.x += sample.x;
+                uv.y += sample.y;
+                ++samples;
+            }
+            if (!samples)
+                continue;
+            uv.x /= samples;
+            uv.y /= samples;
+            if (m_periodicU && (uv.x < low.x || uv.x > high.x))
+                uv.x += uv.x < low.x ? high.x - low.x : low.x - high.x;
+            if (m_periodicV && (uv.y < low.y || uv.y > high.y))
+                uv.y += uv.y < low.y ? high.y - low.y : low.y - high.y;
+            // The pole's own UV can be arbitrary. Approach its boundary from
+            // this polygon's interior instead, including at periodic seams.
+            if (side == 0) uv.x = low.x + (uv.x - low.x) * 1e-6;
+            if (side == 1) uv.y = low.y + (uv.y - low.y) * 1e-6;
+            if (side == 2) uv.x = high.x + (uv.x - high.x) * 1e-6;
+            if (side == 3) uv.y = high.y + (uv.y - high.y) * 1e-6;
+            SmVector3d normal = flat;
+            if (m_surface->EvaluateNormal(uv, TRUE, TRUE, normal) != SM_SUCCESS
+                || !std::isfinite(normal.x) || !std::isfinite(normal.y) || !std::isfinite(normal.z)
+                || normal.Length() < 1e-12)
+                normal = flat;
+            if (normal.Dot(flat) < 0.0)
+                normal *= -1.0;
+            normal *= 1.0 / normal.Length();
+            for (ULONG i = 0; i < count; ++i)
+                if (points[i].DistanceBetween(m_poles[side]) <= m_tolerance)
+                    normals[i] = normal;
+        }
+    }
+};
+} // namespace
+
 SmStatus SmTess::OutputToPolyBrep
  (SmFace                     * pFace,            // in : target face
   SmPolygonOutputCallback    & rPolygonOutput,   // NotUsed: in : Chooses how and where to output the polygons
@@ -6503,7 +6614,8 @@ SmStatus SmTess::OutputToPolyBrep
   const SmTArray<SmVector3d> & cr3DNormals,      // in : associated 3dNormals
   const SmTArray<SmVertex*>  & crBrepVertices)   // in : associated BrepVertex or NULL=none
 {
-  SM_REF1(rPolygonOutput) ; 
+  SmTessPoleNormals sPoleNormals(pFace);
+  SmTessAuxDataGuard sAuxDataGuard;
   // local references
   SmTessSrfCache * pSC           = m_vCache.GetSecond(pFace);
   SmPolyBrep     * pFPB_PolyBrep = (pSC != NULL) ? pSC->mTS_pPolyBrep : NULL ;
@@ -6575,6 +6687,7 @@ SmStatus SmTess::OutputToPolyBrep
                                 crBrepVertices,   // in : assoc BrepVertex in crBrepVertices[pVertexIn2D->m_lIndexValue]
                                 pPolyVertex3D,    // out: PolyVertex mapped to pVertexIn2D->BrepVertex in m_pBrepToPolyBrepMap
                                 pNewAux));        // out: new associated Aux Data (UVPnt & Normal - to be attached to appropriate SmPolyEdge)
+      sAuxDataGuard.Keep(pNewAux);
       sNewVertices[pFPB_PolyVertex->GetIndexValue()] = pPolyVertex3D ;
       sNewAuxData [pFPB_PolyVertex->GetIndexValue()] = pNewAux;
 
@@ -6827,6 +6940,34 @@ SmStatus SmTess::OutputToPolyBrep
           {
               sDelLoops.Add(pNewPLoop);
           }
+          else if (sPoleNormals.HasPoles() && rPolygonOutput.GetGenerateNormals())
+          {
+              SmTArray<SmPolyEdge*> sEdges;
+              SmTArray<SmPoint3d> sPoints;
+              SmTArray<SmPoint2d> sUVs;
+              SmTArray<SmVector3d> sNormals;
+              pNewPLoop->GetPolyEdges(sEdges);
+              for (ULONG n = 0; n < sEdges.GetSize(); ++n)
+              {
+                  const SmPolyVertAuxData* aux = sEdges[n]->GetAuxData();
+                  sPoints.Add(sEdges[n]->GetStartPolyVertex()->GetPoint());
+                  sUVs.Add(aux->m_vUV);
+                  sNormals.Add(aux->m_vNormal);
+              }
+              sPoleNormals.Apply(sEdges.GetSize(), sPoints.GetDataArray(), sUVs.GetDataArray(), sNormals.GetDataArray());
+              for (ULONG n = 0; n < sEdges.GetSize(); ++n)
+              {
+                  const SmPolyVertAuxData* aux = sEdges[n]->GetAuxData();
+                  if ((aux->m_vNormal - sNormals[n]).Length() == 0.0)
+                      continue;
+                  // UV vertices can share auxiliary data around the pole.
+                  // Only this polygon corner receives its directional limit.
+                  auto* corner = new (m_crContext) SmPolyVertAuxData();
+                  corner->m_vUV = aux->m_vUV;
+                  corner->m_vNormal = sNormals[n];
+                  sEdges[n]->SetAuxData(corner);
+              }
+          }
 
         } // end iter all Loops in this Face
 
@@ -6907,12 +7048,7 @@ SmStatus SmTess::OutputToPolyBrep
       SER(m_p3DPolyBrep->DeleteStandalonePolyVertex(s3DPolyVertices[ii]));
     }
 
-  // delete all New AuxData objects that didn't get used
-  ULONG lNumNewAux = sNewAuxData.GetSize();
-  for(ii=0; ii<lNumNewAux; ii++)
-    {
-      sNewAuxData[ii] = sNewAuxData[ii]->DeleteIfNoUsers();
-    }
+  // sAuxDataGuard releases the temporary references, including unused data.
 
   // all done
   return SM_SUCCESS;
@@ -7401,6 +7537,8 @@ SmStatus SmTess::OutputFacePolygons
 
     } // end if SM_PO_CREATE_POLYBREP check
 
+  SmTessPoleNormals sPoleNormals(pFace);
+
   // if you want quads, that should then be the first option to test RCLxx
   // Look for 4 sided polygons which are coplanar.
   if (rPolygonOutput.GetOutputType() == SM_PO_QUADRALATERALS)
@@ -7611,6 +7749,9 @@ SmStatus SmTess::OutputFacePolygons
           //    continue ;
           //  }
 
+          if (rPolygonOutput.GetGenerateNormals())
+              sPoleNormals.Apply(sPoints.GetSize(), sPoints.GetDataArray(), sUVPoints.GetDataArray(), sNormals.GetDataArray());
+
           // Output Quadralateral - massage polygon data depending on draw parameters and
           //                        pass the tuned polygons on to be output to the graphics engine
           SER(rPolygonOutput.OutputPolygon(1,                        // 1 = 4-Sided Planar Polygon
@@ -7675,6 +7816,32 @@ SmStatus SmTess::OutputFacePolygons
               sInitialIndicies.ReverseArray(0,sInitialIndicies.GetSize());
             }
 
+          if (sPoleNormals.HasPoles() && rPolygonOutput.GetGenerateNormals())
+          {
+              SmPoint3d points[3];
+              SmPoint2d uvs[3];
+              SmVector3d normals[3];
+              for (ULONG n = 0; n < 3; ++n)
+              {
+                  const ULONG index = sInitialIndicies[n];
+                  points[n] = sPoints3D[index];
+                  uvs[n] = sPointsUV[index];
+                  normals[n] = sNormals3D[index];
+              }
+              sPoleNormals.Apply(3, points, uvs, normals);
+              for (ULONG n = 0; n < 3; ++n)
+              {
+                  if ((normals[n] - sNormals3D[sInitialIndicies[n]]).Length() == 0.0)
+                      continue;
+                  // Indexed meshes need a separate vertex/normal entry for
+                  // each pole corner, while retaining the exact 3D position.
+                  sInitialIndicies[n] = sPoints3D.GetSize();
+                  sPoints3D.Add(points[n]);
+                  sPointsUV.Add(uvs[n]);
+                  sNormals3D.Add(normals[n]);
+              }
+          }
+
           // accumulate vertex index array
           sPolygonVertexIndicies.Append(sInitialIndicies);
 
@@ -7695,8 +7862,9 @@ SmStatus SmTess::OutputFacePolygons
 
   // Now look for Triangle Strips - where polygons lie along a strip
   // with top and bottom alternating.
-  if(   rPolygonOutput.GetOutputType() == SM_PO_TRIANGLE_STRIPS
-     || rPolygonOutput.GetOutputType() == SM_PO_STRIPS_OR_FANS)
+  if( (!sPoleNormals.HasPoles() || !rPolygonOutput.GetGenerateNormals())
+      && (rPolygonOutput.GetOutputType() == SM_PO_TRIANGLE_STRIPS
+          || rPolygonOutput.GetOutputType() == SM_PO_STRIPS_OR_FANS))
     {
       SM_PTR_ARRAY(sUTracedFaces, SmPolyFace,   256) ; // SmTArray<SmPolyFace *>
       SM_PTR_ARRAY(sVTracedFaces, SmPolyFace,   256) ; // SmTArray<SmPolyFace *>
@@ -7850,8 +8018,9 @@ SmStatus SmTess::OutputFacePolygons
 
   // when asked - Look for Triangle Fans - where a bunch of triangles come into
   // a single vertex.
-  if(   rPolygonOutput.GetOutputType() == SM_PO_TRIANGLE_FANS
-     || rPolygonOutput.GetOutputType() == SM_PO_STRIPS_OR_FANS)
+  if( (!sPoleNormals.HasPoles() || !rPolygonOutput.GetGenerateNormals())
+      && (rPolygonOutput.GetOutputType() == SM_PO_TRIANGLE_FANS
+          || rPolygonOutput.GetOutputType() == SM_PO_STRIPS_OR_FANS))
     {
       SM_PTR_ARRAY(sFanEdges, SmPolyEdge, 64) ; // SmTArray<SmPolyEdge *>
 
@@ -8029,6 +8198,11 @@ SmStatus SmTess::OutputFacePolygons
           // skip triangles too small to fix
       //    continue ;
       //  }
+
+      // A pole shared by a strip/fan cannot carry a distinct normal per
+      // triangle. Such faces fall through here to individual polygons.
+      if (rPolygonOutput.GetGenerateNormals())
+          sPoleNormals.Apply(sPoints.GetSize(), sPoints.GetDataArray(), sUVPoints.GetDataArray(), sNormals.GetDataArray());
 
       // Output polygon, either triangle or quad
       SE(rPolygonOutput.OutputPolygon(lType,

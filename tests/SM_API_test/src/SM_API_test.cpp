@@ -60,6 +60,17 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
       smos_WriteBuffer(_T("\n\n******************** End TestSmBoolean NOT successful ************\n"), NULL);
   }
 
+  MYPRINTF(_T("\n\n******************** Start TestSmTessellationPoleNormals ************\n"));
+  stat = TestSmTessellationPoleNormals();
+  iCnt++;
+  if (stat == SM_SUCCESS) {
+      nSuccessFul++;
+      smos_WriteBuffer(_T("\nTestSmTessellationPoleNormals Successful\n"));
+  }
+  else {
+      nFailed++;
+      smos_WriteBuffer(_T("\nTestSmTessellationPoleNormals NOT successful\n"));
+  }
   MYPRINTF(_T("\n\n******************** Start TestSmBooleanBoundsExample ************\n"));
   stat = TestSmBooleanBoundsExample();
   iCnt++;
