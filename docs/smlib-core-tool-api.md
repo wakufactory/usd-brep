@@ -57,7 +57,7 @@ flowchart LR
 | `create_planar_circle` | `origin, radius` | — | `Brep`、厚みのない円面 |
 | `create_profile` | `points` | — | 再利用可能な `Profile`。穴なし多角形の2D点列 |
 | `create_spline_profile` | `points` | — | 再利用可能な `Profile`。通過点を結ぶ閉じた3次スプライン |
-| `create_extrude` | `profile, origin, start, end` | `axis=None, xdir=None` | 両端を閉じた押し出し `Brep` |
+| `create_extrude` | `profile, origin, start, end` | `axis=None, xdir=None, draft_angle=0.0` | 両端を閉じた押し出し／抜き勾配付き `Brep` |
 | `create_revolve` | `profile, origin, start_angle_deg, end_angle_deg` | `axis=None, xdir=None` | 全回転または端面を閉じた部分回転 `Brep` |
 | `boolean_union` / `boolean_difference` / `boolean_intersection` | `a, b` | — | `a` と同じ `Brep` ハンドル。`b` を消費 |
 | `chamfer_fillet` / `circular_fillet` | `brep, radius` | — | 入力と同じ `Brep` ハンドルを変更して返す |
@@ -82,7 +82,9 @@ flowchart LR
 
 `create_extrude` はローカルXY断面を軸方向の距離 `start < end` の間に押し出し、`create_revolve` は `(半径, 高さ)` 断面を回転します。回転半径は0以上で、軸に接してよく、角度範囲は `0 < end-start <= 360` 度です。原点は距離0／高さ0の軸上にあります。`xdir` はローカル+X／角度0の半径方向で、軸に垂直な面へ投影して正規化します。軸に平行な `xdir` は拒否し、省略時は既存プリミティブと同じ最短回転を使います。
 
-生成ごとに一時的な `SmLine`、または `SmApiCreateCanonicalCurve` による3次 Bézier 曲線を作り、入力曲線をコピーする `SmApiCreateLinearSweep` / `SmApiCreateRotationalSweep` に渡します。一時曲線は成功・失敗のどちらでも解放し、元の `Profile` と呼び出し側の点列は変更しません。生成後に `SmApiBrepIsManifoldSolid` を確認し、閉じたソリッドにならなければ `RuntimeError` にします。穴付き断面はこのAPIでは未対応です。
+`create_extrude(..., draft_angle=角度)` は `-90 < 角度 < 90` 度で指定します。正は内向き、負は外向きです。0（既定）は従来の直線押し出しです。角度が非ゼロのときは `SmApiCreateDraftSweep` を呼び、生成後に指定終端面へ面積のあるキャップができたことを確認します。側面の衝突などで指定終端に達しなければ `ValueError` です。
+
+生成ごとに一時的な `SmLine`、または `SmApiCreateCanonicalCurve` による曲線を作り、入力曲線をコピーする `SmApiCreateLinearSweep` / `SmApiCreateDraftSweep` / `SmApiCreateRotationalSweep` に渡します。抜き勾配付き多角形では直線辺を1次 B スプラインとして渡します。一時曲線は成功・失敗のどちらでも解放し、元の `Profile` と呼び出し側の点列は変更しません。生成後に `SmApiBrepIsManifoldSolid` を確認し、閉じたソリッドにならなければ `RuntimeError` にします。穴付き断面はこのAPIでは未対応です。
 
 - 生成関数は新しい `Brep` を返す。Boolean の成功時は `a` をその場で変更して同じハンドルを返し、`b.valid` は `False` になる。消費済み `b` を再利用すると `ValueError`。同一ハンドルを両入力に渡すことも `ValueError`。
 - Boolean の失敗時は C++ API の契約に従い、両入力は解放されないが、形状が変更されている可能性がある。失敗後に元形状が保たれていると仮定しない。

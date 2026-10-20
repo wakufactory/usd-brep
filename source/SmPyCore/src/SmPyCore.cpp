@@ -319,12 +319,14 @@ ProfileFrame profile_frame(py::tuple origin, const py::object& axis, const py::o
 }
 
 Brep make_profile_solid(const Profile& profile, py::tuple origin, double start, double end,
-                        const py::object& axis, const py::object& xdir, bool revolve)
+                        const py::object& axis, const py::object& xdir, bool revolve, double draft_angle = 0.0)
 {
     if (revolve)
         angular_sweep(start, end);
     else if (!std::isfinite(start) || !std::isfinite(end) || !std::isfinite(end - start) || end <= start)
         throw py::value_error("extrude requires finite start < end");
+    if (!std::isfinite(draft_angle) || std::abs(draft_angle) >= 90.0)
+        throw py::value_error("draft angle must be finite and between -90 and 90 degrees");
     const ProfileFrame f = profile_frame(origin, axis, xdir);
     std::vector<SmPoint3d> points;
     const double angle = std::remainder(start, 360.0) * (std::acos(-1.0) / 180.0);
@@ -364,6 +366,23 @@ Brep make_profile_solid(const Profile& profile, py::tuple origin, double start, 
             owned.emplace_back(curve);
             curves.Add(curve);
         }
+        else if (draft_angle != 0.0)
+        {
+            SmTArray<SmPoint3d> poles;
+            poles.Add(points[i]);
+            poles.Add(points[(i + 1) % points.size()]);
+            SmTArray<double> knots;
+            knots.Add(0.0);
+            knots.Add(1.0);
+            SmTArray<ULONG> multiplicities;
+            multiplicities.Add(2);
+            multiplicities.Add(2);
+            SmBSplineCurve* curve = nullptr;
+            check(SmApiCreateCanonicalCurve(poles, knots, multiplicities, nullptr, 1,
+                                            SM_CF_UNSPECIFIED, curve), "SmApiCreateCanonicalCurve");
+            owned.emplace_back(curve);
+            curves.Add(curve);
+        }
         else
         {
             SmLine* line = nullptr;
@@ -376,15 +395,59 @@ Brep make_profile_solid(const Profile& profile, py::tuple origin, double start, 
     SmBrep* result = nullptr;
     const SmApiStatus status = revolve
         ? SmApiCreateRotationalSweep(curves, f.origin, f.z, end - start, TRUE, result)
-        : SmApiCreateLinearSweep(curves, f.z, end - start, TRUE, result);
+        : draft_angle != 0.0
+            ? SmApiCreateDraftSweep(curves, end - start, draft_angle, FALSE, 3, result)
+            : SmApiCreateLinearSweep(curves, f.z, end - start, TRUE, result);
     std::unique_ptr<SmBrep> cleanup(result);
-    check(status, revolve ? "SmApiCreateRotationalSweep" : "SmApiCreateLinearSweep");
+    check(status, revolve ? "SmApiCreateRotationalSweep" : draft_angle != 0.0
+          ? "SmApiCreateDraftSweep (profile may collapse or self-intersect)" : "SmApiCreateLinearSweep");
     if (!result)
         throw std::runtime_error("profile sweep returned a null Brep");
     SmBoolean manifold = FALSE;
     check(SmApiBrepIsManifoldSolid(result, manifold), "SmApiBrepIsManifoldSolid");
     if (!manifold)
         throw std::runtime_error("profile sweep did not produce a manifold solid");
+    if (!revolve && draft_angle != 0.0)
+    {
+        // The kernel may return a manifold tip at the first collision instead of
+        // reaching the requested end plane. Require a nondegenerate end cap.
+        SmTArray<SmFace*> faces;
+        result->GetFaces(faces);
+        const double tolerance = 1e-7 * std::max(1.0, end - start);
+        bool has_end_cap = false;
+        for (ULONG i = 0; i < faces.GetSize(); ++i)
+        {
+            SmTArray<SmVertex*> vertices;
+            faces[i]->GetVertices(vertices);
+            if (vertices.GetSize() == 0)
+                continue;
+            bool at_end = true;
+            for (ULONG j = 0; j < vertices.GetSize(); ++j)
+            {
+                SmPoint3d point;
+                check(SmApiVertexGetPoint(vertices[j], point), "SmApiVertexGetPoint");
+                const double distance = (point.x - f.origin.x) * f.z.x
+                                      + (point.y - f.origin.y) * f.z.y
+                                      + (point.z - f.origin.z) * f.z.z;
+                if (std::abs(distance - end) > tolerance)
+                {
+                    at_end = false;
+                    break;
+                }
+            }
+            if (!at_end)
+                continue;
+            double area = 0.0;
+            check(SmApiFaceComputeArea(faces[i], 1e-3, area), "SmApiFaceComputeArea");
+            if (area > 1e-12)
+            {
+                has_end_cap = true;
+                break;
+            }
+        }
+        if (!has_end_cap)
+            throw py::value_error("draft profile collapses or self-intersects before the requested end");
+    }
     return std::make_shared<BrepHandle>(cleanup.release());
 }
 
@@ -821,14 +884,15 @@ PYBIND11_MODULE(_smlib_core, module)
                "Reject self-intersecting sampled boundaries and runs of three identical points.\n"
                "Input points are unchanged; native curves are created temporarily for each sweep.");
     module.def("create_extrude", [](const Profile& p, py::tuple origin, double start, double end,
-                                    py::object axis, py::object xdir) {
-        return make_profile_solid(p, origin, start, end, axis, xdir, false);
+                                    py::object axis, py::object xdir, double draft_angle) {
+        return make_profile_solid(p, origin, start, end, axis, xdir, false, draft_angle);
     }, py::arg("profile"), py::arg("origin"), py::arg("start"), py::arg("end"),
-       py::arg("axis") = py::none(), py::arg("xdir") = py::none(),
+       py::arg("axis") = py::none(), py::arg("xdir") = py::none(), py::arg("draft_angle") = 0.0,
        "Pure: returns new capped Brep; Profile unchanged.\n\n"
        "Extrude local XY profile from start to end along axis (default +Z), start < end.\n"
+       "Optional draft_angle: positive tapers inward, negative outward; zero uses linear sweep.\n"
        "xdir sets local +X after projection perpendicular to axis; default is shortest +Z rotation.\n\n"
-       "Wraps: SmApiCreateLineSegment, SmApiCreateLinearSweep");
+       "Wraps: SmApiCreateLinearSweep or SmApiCreateDraftSweep");
     module.def("create_revolve", [](const Profile& p, py::tuple origin, double start, double end,
                                     py::object axis, py::object xdir) {
         return make_profile_solid(p, origin, start, end, axis, xdir, true);
