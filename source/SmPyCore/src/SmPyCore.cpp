@@ -22,6 +22,7 @@
 #include <array>
 #include <cmath>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -173,6 +174,25 @@ Profile make_profile(const std::vector<std::array<double, 2>>& input)
     if (area < 0.0)
         std::reverse(points.begin(), points.end());
     return profile;
+}
+
+Profile make_polygon_profile(const std::vector<std::array<double, 2>>& input)
+{
+    std::vector<std::array<double, 2>> unique;
+    unique.reserve(std::min(input.size(), size_t(1024)));
+    std::set<std::array<double, 2>> seen;
+    for (const auto& point : input)
+    {
+        if (!std::isfinite(point[0]) || !std::isfinite(point[1]))
+            throw py::value_error("profile coordinates must be finite");
+        if (seen.insert(point).second)
+        {
+            unique.push_back(point);
+            if (unique.size() > 1024)
+                throw py::value_error("profile requires 3 to 1024 vertices");
+        }
+    }
+    return make_profile(unique);
 }
 
 std::array<std::array<double, 2>, 4> spline_span(const std::vector<std::array<double, 2>>& points, size_t i)
@@ -790,10 +810,10 @@ PYBIND11_MODULE(_smlib_core, module)
         .def_property_readonly("points", [](const Profile& p) { return p.points; },
                                "Return a copy of the counter-clockwise 2D through-points.")
         .def_property_readonly("spline", [](const Profile& p) { return p.spline; });
-    module.def("create_profile", &make_profile, py::arg("points"),
+    module.def("create_profile", &make_polygon_profile, py::arg("points"),
                "Pure: create a reusable closed polygon Profile; input points are unchanged.\n\n"
-               "Accept 3 to 1024 finite 2D vertices without holes or self-intersections.\n"
-               "The closing edge is implicit; a repeated last point is accepted. Winding is normalized.\n"
+               "Accept 3 to 1024 distinct finite 2D vertices without holes or self-intersections.\n"
+               "Exact duplicate points are ignored in input order; the closing edge is implicit. Winding is normalized.\n"
                "Validation is performed in this binding; no kernel geometry is allocated.");
     module.def("create_spline_profile", &make_spline_profile, py::arg("points"),
                "Pure: create a reusable closed cubic spline Profile through 4 to 64 finite 2D points.\n"
