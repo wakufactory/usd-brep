@@ -56,6 +56,7 @@ flowchart LR
 | `create_plane` | `origin, length, width` | — | `Brep`、厚みのない平面 |
 | `create_planar_circle` | `origin, radius` | — | `Brep`、厚みのない円面 |
 | `create_profile` | `points` | — | 再利用可能な `Profile`。穴なし多角形の2D点列 |
+| `create_spline_profile` | `points` | — | 再利用可能な `Profile`。通過点を結ぶ閉じた3次スプライン |
 | `create_extrude` | `profile, origin, start, end` | `axis=None, xdir=None` | 両端を閉じた押し出し `Brep` |
 | `create_revolve` | `profile, origin, start_angle_deg, end_angle_deg` | `axis=None, xdir=None` | 全回転または端面を閉じた部分回転 `Brep` |
 | `boolean_union` / `boolean_difference` / `boolean_intersection` | `a, b` | — | `a` と同じ `Brep` ハンドル。`b` を消費 |
@@ -77,11 +78,11 @@ flowchart LR
 
 ### 所有権と失敗
 
-`Profile` はネイティブ曲線を保持しない2D点列の値です。`create_profile` は3〜1024頂点の有限な単一輪郭を検査し、自己交差・自己接触・重なり・ゼロ長辺・ゼロ面積を拒否して反時計回りに統一します。終点に始点を再記載しても構いません。`Profile.points` は点列のコピーを返します。
+`Profile` はネイティブ曲線を保持しない2D点列の値です。`create_profile` は3〜1024頂点の有限な単一輪郭を検査し、自己交差・自己接触・重なり・ゼロ長辺・ゼロ面積を拒否して反時計回りに統一します。終点に始点を再記載しても構いません。`create_spline_profile` は4〜64組の有限な通過点から周期的な3次 Catmull-Rom 形の曲線を作り、各区間を3次 Bézier としてスイープ時だけ生成します。通常のつなぎ目は C1 連続です。同じ通過点が隣接して2回ある場合はゼロ長区間を作らず、その位置で接線が折れます。3回以上の連続と異なる点が4個未満の輪郭は拒否します。末尾に始点を再記載した場合は閉じ指定として取り除きます。曲線輪郭の検査には1区間16個のサンプルを使います。`Profile.points` は点列のコピー、`Profile.spline` は種類を返します。
 
 `create_extrude` はローカルXY断面を軸方向の距離 `start < end` の間に押し出し、`create_revolve` は `(半径, 高さ)` 断面を回転します。回転半径は0以上で、軸に接してよく、角度範囲は `0 < end-start <= 360` 度です。原点は距離0／高さ0の軸上にあります。`xdir` はローカル+X／角度0の半径方向で、軸に垂直な面へ投影して正規化します。軸に平行な `xdir` は拒否し、省略時は既存プリミティブと同じ最短回転を使います。
 
-生成ごとに一時的な `SmLine` を `SmApiCreateLineSegment` で作り、入力曲線をコピーする `SmApiCreateLinearSweep` / `SmApiCreateRotationalSweep` に渡します。一時曲線は成功・失敗のどちらでも解放し、元の `Profile` と呼び出し側の点列は変更しません。生成後に `SmApiBrepIsManifoldSolid` を確認し、閉じたソリッドにならなければ `RuntimeError` にします。円弧・スプライン・穴付き断面はこのAPIでは未対応です。
+生成ごとに一時的な `SmLine`、または `SmApiCreateCanonicalCurve` による3次 Bézier 曲線を作り、入力曲線をコピーする `SmApiCreateLinearSweep` / `SmApiCreateRotationalSweep` に渡します。一時曲線は成功・失敗のどちらでも解放し、元の `Profile` と呼び出し側の点列は変更しません。生成後に `SmApiBrepIsManifoldSolid` を確認し、閉じたソリッドにならなければ `RuntimeError` にします。穴付き断面はこのAPIでは未対応です。
 
 - 生成関数は新しい `Brep` を返す。Boolean の成功時は `a` をその場で変更して同じハンドルを返し、`b.valid` は `False` になる。消費済み `b` を再利用すると `ValueError`。同一ハンドルを両入力に渡すことも `ValueError`。
 - Boolean の失敗時は C++ API の契約に従い、両入力は解放されないが、形状が変更されている可能性がある。失敗後に元形状が保たれていると仮定しない。

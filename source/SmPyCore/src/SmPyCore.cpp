@@ -12,6 +12,7 @@
 #include <SmApiPrimitives.h>
 #include <SmApiQueries.h>
 #include <SmBrep.h>
+#include <SmBSplineCurve.h>
 #include <SmFace.h>
 #include <SmLine.h>
 #include <SmPoly.h>
@@ -101,6 +102,7 @@ using PolyBrep = std::shared_ptr<PolyHandle>;
 struct Profile
 {
     std::vector<std::array<double, 2>> points;
+    bool spline = false;
 };
 
 Profile make_profile(const std::vector<std::array<double, 2>>& input)
@@ -173,6 +175,76 @@ Profile make_profile(const std::vector<std::array<double, 2>>& input)
     return profile;
 }
 
+std::array<std::array<double, 2>, 4> spline_span(const std::vector<std::array<double, 2>>& points, size_t i)
+{
+    const size_t n = points.size();
+    const auto& prev = points[(i + n - 1) % n];
+    const auto& a = points[i];
+    const auto& b = points[(i + 1) % n];
+    const auto& next = points[(i + 2) % n];
+    std::array<std::array<double, 2>, 4> control{a, a, b, b};
+    for (int j = 0; j < 2; ++j)
+    {
+        control[1][j] += (b[j] - prev[j]) / 6.0;
+        control[2][j] -= (next[j] - a[j]) / 6.0;
+    }
+    return control;
+}
+
+Profile make_spline_profile(const std::vector<std::array<double, 2>>& input)
+{
+    std::vector<std::array<double, 2>> points = input;
+    if (points.size() > 1 && points.front() == points.back())
+        points.pop_back();
+    if (points.size() < 4 || points.size() > 64)
+        throw py::value_error("spline profile requires 4 to 64 through-points");
+    for (const auto& point : points)
+        for (double coordinate : point)
+            if (!std::isfinite(coordinate))
+                throw py::value_error("profile coordinates must be finite");
+    size_t nondegenerate_spans = 0;
+    for (size_t i = 0; i < points.size(); ++i)
+    {
+        const auto& a = points[i];
+        const auto& b = points[(i + 1) % points.size()];
+        const auto& c = points[(i + 2) % points.size()];
+        if (a == b && b == c)
+            throw py::value_error("spline profile allows at most two consecutive identical through-points");
+        nondegenerate_spans += a != b;
+    }
+    if (nondegenerate_spans < 4)
+        throw py::value_error("spline profile requires at least 4 distinct through-points");
+
+    // Validate the actual curved boundary, not only its control polygon.
+    std::vector<std::array<double, 2>> sampled;
+    sampled.reserve(points.size() * 16);
+    for (size_t i = 0; i < points.size(); ++i)
+    {
+        if (points[i] == points[(i + 1) % points.size()])
+            continue;
+        const auto control = spline_span(points, i);
+        for (int step = 0; step < 16; ++step)
+        {
+            const double t = double(step) / 16.0, s = 1.0 - t;
+            sampled.push_back({{
+                s*s*s*control[0][0] + 3*s*s*t*control[1][0] + 3*s*t*t*control[2][0] + t*t*t*control[3][0],
+                s*s*s*control[0][1] + 3*s*s*t*control[1][1] + 3*s*t*t*control[2][1] + t*t*t*control[3][1]
+            }});
+        }
+    }
+    make_profile(sampled);
+    double area = 0.0;
+    for (size_t i = 0; i < sampled.size(); ++i)
+    {
+        const auto& a = sampled[i];
+        const auto& b = sampled[(i + 1) % sampled.size()];
+        area += a[0] * b[1] - b[0] * a[1];
+    }
+    if (area < 0.0)
+        std::reverse(points.begin(), points.end());
+    return Profile{points, true};
+}
+
 SmVector3d unit_vector(const SmVector3d& value, const char* name)
 {
     const double scale = std::max({std::abs(value.x), std::abs(value.y), std::abs(value.z)});
@@ -243,14 +315,42 @@ Brep make_profile_solid(const Profile& profile, py::tuple origin, double start, 
         points.push_back(revolve ? f.point(p[0] * std::cos(angle), p[0] * std::sin(angle), p[1])
                                  : f.point(p[0], p[1], start));
     }
-    std::vector<std::unique_ptr<SmLine>> owned;
+    std::vector<std::unique_ptr<SmCurve>> owned;
     SmTArray<SmCurve*> curves;
     for (size_t i = 0; i < points.size(); ++i)
     {
-        SmLine* line = nullptr;
-        check(SmApiCreateLineSegment(points[i], points[(i + 1) % points.size()], line), "SmApiCreateLineSegment");
-        owned.emplace_back(line);
-        curves.Add(line);
+        if (profile.spline)
+        {
+            if (profile.points[i] == profile.points[(i + 1) % points.size()])
+                continue;
+            const auto control = spline_span(profile.points, i);
+            SmTArray<SmPoint3d> poles;
+            for (const auto& p : control)
+            {
+                if (revolve && p[0] < 0.0)
+                    throw py::value_error("revolve spline must stay at non-negative radius");
+                poles.Add(revolve ? f.point(p[0] * std::cos(angle), p[0] * std::sin(angle), p[1])
+                                  : f.point(p[0], p[1], start));
+            }
+            SmTArray<double> knots;
+            knots.Add(0.0);
+            knots.Add(1.0);
+            SmTArray<ULONG> multiplicities;
+            multiplicities.Add(4);
+            multiplicities.Add(4);
+            SmBSplineCurve* curve = nullptr;
+            check(SmApiCreateCanonicalCurve(poles, knots, multiplicities, nullptr, 3,
+                                            SM_CF_UNSPECIFIED, curve), "SmApiCreateCanonicalCurve");
+            owned.emplace_back(curve);
+            curves.Add(curve);
+        }
+        else
+        {
+            SmLine* line = nullptr;
+            check(SmApiCreateLineSegment(points[i], points[(i + 1) % points.size()], line), "SmApiCreateLineSegment");
+            owned.emplace_back(line);
+            curves.Add(line);
+        }
     }
     // SM_API copies the curves; owned releases our originals on every exit.
     SmBrep* result = nullptr;
@@ -688,12 +788,18 @@ PYBIND11_MODULE(_smlib_core, module)
 
     py::class_<Profile>(module, "Profile")
         .def_property_readonly("points", [](const Profile& p) { return p.points; },
-                               "Return a copy of the normalized counter-clockwise 2D boundary.");
+                               "Return a copy of the counter-clockwise 2D through-points.")
+        .def_property_readonly("spline", [](const Profile& p) { return p.spline; });
     module.def("create_profile", &make_profile, py::arg("points"),
                "Pure: create a reusable closed polygon Profile; input points are unchanged.\n\n"
                "Accept 3 to 1024 finite 2D vertices without holes or self-intersections.\n"
                "The closing edge is implicit; a repeated last point is accepted. Winding is normalized.\n"
                "Validation is performed in this binding; no kernel geometry is allocated.");
+    module.def("create_spline_profile", &make_spline_profile, py::arg("points"),
+               "Pure: create a reusable closed cubic spline Profile through 4 to 64 finite 2D points.\n"
+               "The cyclic interpolation is C1 continuous except at adjacent duplicate points, which form corners.\n"
+               "Reject self-intersecting sampled boundaries and runs of three identical points.\n"
+               "Input points are unchanged; native curves are created temporarily for each sweep.");
     module.def("create_extrude", [](const Profile& p, py::tuple origin, double start, double end,
                                     py::object axis, py::object xdir) {
         return make_profile_solid(p, origin, start, end, axis, xdir, false);
