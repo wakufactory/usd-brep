@@ -1,0 +1,100 @@
+[2026-10-28 22:52:46,239][INFO][omni.repo.man.utils.set_niceness:1196] set process niceness to 19 (max)
+[2026-10-28 22:52:46,240][INFO][omni.repo.man.configuration.set_token:243] Token: 'platform_target' set to 'macos-universal'
+[2026-10-28 22:52:46,240][INFO][omni.repo.man.configuration.set_token:243] Token: 'platform_target_abi' set to 'macos-universal'
+[2026-10-28 22:52:48,072][WARNING][omni.repo.man.version.get_tool_version:316] Retrieving repo_build version via VERSION file.
+[2026-10-28 22:52:48,084][ERROR][omni.repo.man.exceptions_utils.print_log:250] BuildError exception stack trace dumped to logfile /Users/waku/Documents/dev/cad/usd-brep/_repo/repo.log. Stacks dumped to console via `--verbose` or `--tracebacks`. 
+BuildError: An error occured while pulling packman dependencies for `/Users/waku/Documents/dev/cad/usd-brep/deps/host-deps.packman.xml`:
+Package not found on specified remote servers! (name: premake, version: 5.0.0-beta1+nv1-macos-universal)
+[2026-10-28 22:52:48,086][ERROR][omni.repo.emit_stack_to_logfile:156] BuildError encountered while running repo_build via ['/Users/waku/Documents/dev/cad/usd-brep/tools/repoman/repoman.py', 'build', '-g', '-r', '-p', 'macos-universal']:
+Traceback (most recent call last):
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_build/omni/repo/build/dependencies.py", line 354, in pull_files
+    returned_data = packmanapi.pull(
+                    ^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/.packman-cache/packman-common/8.6.3/packman/utils.py", line 568, in wrapper_message_block
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/.packman-cache/packman-common/8.6.3/packman/main.py", line 1088, in pull
+    dep_map = pull_with_variable_file(
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/.packman-cache/packman-common/8.6.3/packman/main.py", line 1151, in pull_with_variable_file
+    pull_map = pull_dependencies(
+               ^^^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/.packman-cache/packman-common/8.6.3/packman/main.py", line 1363, in pull_dependencies
+    raise errors.PackmanErrorFileNotFound(
+packman.errors.PackmanErrorFileNotFound: Package not found on specified remote servers! (name: premake, version: 5.0.0-beta1+nv1-macos-universal)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_man/omni/repo/man/config.py", line 355, in run
+    options.func(options)
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_man/omni/repo/man/config.py", line 310, in <lambda>
+    func=lambda args, func=func, config=self.merged_tool_config: func(args, config),
+                                                                 ^^^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_build/omni/repo/build/main.py", line 1827, in run_repo_tool
+    run_build(options, repo_folders, None, config)
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_build/omni/repo/build/utils.py", line 49, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_build/omni/repo/build/main.py", line 1304, in run_build
+    dependencies = pull_dependencies_fn(
+                   ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_man/omni/repo/man/nvteamcity.py", line 182, in wrapper
+    result = func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_build/omni/repo/build/dependencies.py", line 382, in pull_dependencies
+    pull_files(packman_host_files_to_pull, platform_host, dependencies)
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_build/omni/repo/build/dependencies.py", line 363, in pull_files
+    raise BuildError(
+omni.repo.build.exceptions.BuildError: An error occured while pulling packman dependencies for `/Users/waku/Documents/dev/cad/usd-brep/deps/host-deps.packman.xml`:
+Package not found on specified remote servers! (name: premake, version: 5.0.0-beta1+nv1-macos-universal)
+[2026-10-28 22:52:48,441][INFO][omni.repo.man.utils.set_niceness:1196] set process niceness to 19 (max)
+[2026-10-28 22:52:48,441][INFO][omni.repo.man.configuration.set_token:243] Token: 'platform_target' set to 'macos-universal'
+[2026-10-28 22:52:48,441][INFO][omni.repo.man.configuration.set_token:243] Token: 'platform_target_abi' set to 'macos-universal'
+[2026-10-28 22:52:48,665][WARNING][omni.repo.man.version.get_tool_version:316] Retrieving repo_build version via VERSION file.
+[2026-10-28 22:52:48,670][ERROR][omni.repo.man.exceptions_utils.print_log:250] BuildError exception stack trace dumped to logfile /Users/waku/Documents/dev/cad/usd-brep/_repo/repo.log. Stacks dumped to console via `--verbose` or `--tracebacks`. 
+BuildError: An error occured while pulling packman dependencies for `/Users/waku/Documents/dev/cad/usd-brep/deps/host-deps.packman.xml`:
+Package not found on specified remote servers! (name: premake, version: 5.0.0-beta1+nv1-macos-universal)
+[2026-10-28 22:52:48,672][ERROR][omni.repo.emit_stack_to_logfile:156] BuildError encountered while running repo_build via ['/Users/waku/Documents/dev/cad/usd-brep/tools/repoman/repoman.py', 'build', '-p', 'macos-universal', '-j10']:
+Traceback (most recent call last):
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_build/omni/repo/build/dependencies.py", line 354, in pull_files
+    returned_data = packmanapi.pull(
+                    ^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/.packman-cache/packman-common/8.6.3/packman/utils.py", line 568, in wrapper_message_block
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/.packman-cache/packman-common/8.6.3/packman/main.py", line 1088, in pull
+    dep_map = pull_with_variable_file(
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/.packman-cache/packman-common/8.6.3/packman/main.py", line 1151, in pull_with_variable_file
+    pull_map = pull_dependencies(
+               ^^^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/.packman-cache/packman-common/8.6.3/packman/main.py", line 1363, in pull_dependencies
+    raise errors.PackmanErrorFileNotFound(
+packman.errors.PackmanErrorFileNotFound: Package not found on specified remote servers! (name: premake, version: 5.0.0-beta1+nv1-macos-universal)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_man/omni/repo/man/config.py", line 355, in run
+    options.func(options)
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_man/omni/repo/man/config.py", line 310, in <lambda>
+    func=lambda args, func=func, config=self.merged_tool_config: func(args, config),
+                                                                 ^^^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_build/omni/repo/build/main.py", line 1827, in run_repo_tool
+    run_build(options, repo_folders, None, config)
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_build/omni/repo/build/utils.py", line 49, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_build/omni/repo/build/main.py", line 1304, in run_build
+    dependencies = pull_dependencies_fn(
+                   ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_man/omni/repo/man/nvteamcity.py", line 182, in wrapper
+    result = func(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_build/omni/repo/build/dependencies.py", line 382, in pull_dependencies
+    pull_files(packman_host_files_to_pull, platform_host, dependencies)
+  File "/Users/waku/Documents/dev/cad/usd-brep/_repo/deps/repo_build/omni/repo/build/dependencies.py", line 363, in pull_files
+    raise BuildError(
+omni.repo.build.exceptions.BuildError: An error occured while pulling packman dependencies for `/Users/waku/Documents/dev/cad/usd-brep/deps/host-deps.packman.xml`:
+Package not found on specified remote servers! (name: premake, version: 5.0.0-beta1+nv1-macos-universal)
