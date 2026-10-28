@@ -109,6 +109,18 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
       smos_WriteBuffer(_T("\n\n******************** End TestSmPrecisePropertySelection NOT successful ************\n"));
   }
 
+  MYPRINTF(_T("\n\n******************** Start TestSmFaceAreaTinyTrimSpans ************\n"));
+  stat = TestSmFaceAreaTinyTrimSpans();
+  iCnt++;
+  if (stat == SM_SUCCESS) {
+      nSuccessFul++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmFaceAreaTinyTrimSpans Successful ************\n"));
+  }
+  else {
+      nFailed++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmFaceAreaTinyTrimSpans NOT successful ************\n"));
+  }
+
   MYPRINTF(_T("\n\n******************** Start TestSmBrepDistance ************\n"));
 
   stat = TestSmBrepDistance();
@@ -135,6 +147,20 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
   else {
       nFailed++;
       smos_WriteBuffer(_T("\n\n******************** End TestSmMaterialCensus NOT successful ************\n"));
+  }
+
+  MYPRINTF(_T("\n\n******************** Start TestSmBrepRefreshGaps ************\n"));
+
+  stat = TestSmBrepRefreshGaps();
+  iCnt++;
+
+  if (stat == SM_SUCCESS) {
+      nSuccessFul++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmBrepRefreshGaps Successful ************\n"));
+  }
+  else {
+      nFailed++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmBrepRefreshGaps NOT successful ************\n"));
   }
 
   MYPRINTF(_T("\n\n******************** Start TestSmMergeBreps   ************\n"));
@@ -427,6 +453,20 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
       smos_WriteBuffer(_T("\n\n******************** End TestSmStitchIntoSolid NOT successful ************\n"));
   }
 
+  MYPRINTF(_T("\n\n******************** Start TestSmBooleanLampWellEndpoints ************\n"));
+
+  stat = TestSmBooleanLampWellEndpoints();
+  iCnt++;
+
+  if (stat == SM_SUCCESS) {
+      nSuccessFul++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmBooleanLampWellEndpoints Successful ************\n"));
+  }
+  else {
+      nFailed++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmBooleanLampWellEndpoints NOT successful ************\n"));
+  }
+
   MYPRINTF(_T("\n\n******************** Start TestSmStitchIntoShell ************\n"));
 
   stat = TestSmStitchIntoShell();
@@ -666,6 +706,20 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
       smos_WriteBuffer(_T("\n\n******************** End TestSmLiftUVCurve NOT successful ************\n"));
   }
 
+  MYPRINTF(_T("\n\n******************** Start TestSmRemoveOneKnotLargeRange ************\n"));
+
+  stat = TestSmRemoveOneKnotLargeRange();
+  iCnt++;
+
+  if (stat == SM_SUCCESS) {
+      nSuccessFul++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmRemoveOneKnotLargeRange Successful ************\n"));
+  }
+  else {
+      nFailed++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmRemoveOneKnotLargeRange NOT successful ************\n"));
+  }
+
   MYPRINTF(_T("\n\n******************** Start TestSmMakeCurvesCompatible ************\n"));
 
   stat = TestSmMakeCurvesCompatible();
@@ -692,6 +746,20 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
   else {
       nFailed++;
       smos_WriteBuffer(_T("\n\n******************** End TestSmOrderCurves NOT successful ************\n"));
+  }
+
+  MYPRINTF(_T("\n\n******************** Start TestSmReverseUnclampedCurve ************\n"));
+
+  stat = TestSmReverseUnclampedCurve();
+  iCnt++;
+
+  if (stat == SM_SUCCESS) {
+      nSuccessFul++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmReverseUnclampedCurve Successful ************\n"));
+  }
+  else {
+      nFailed++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmReverseUnclampedCurve NOT successful ************\n"));
   }
 
   MYPRINTF(_T("\n\n******************** Start TestSmRemoveCurveKnots ************\n"));
@@ -779,20 +847,6 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
       smos_WriteBuffer(_T("\n\n******************** End TestSmVariableRadiusFillet NOT successful ************\n"));
   }
 
-  MYPRINTF(_T("\n\n******************** Start TestSmRemoveFillet ************\n"));
-
-  stat = TestSmRemoveFillet();
-  iCnt++;
-
-  if (stat == SM_SUCCESS) {
-      nSuccessFul++;
-      smos_WriteBuffer(_T("\n\n******************** End TestSmRemoveFillet Successful ************\n"));
-  }
-  else {
-      nFailed++;
-      smos_WriteBuffer(_T("\n\n******************** End TestSmRemoveFillet NOT successful ************\n"));
-  }
-
   
 
   MYPRINTF(_T("\n\n******************** Start TestSmSurfaceSurfaceFillet ************\n"));
@@ -835,6 +889,20 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
   else {
       nFailed++;
       smos_WriteBuffer(_T("\n\n******************** End TestSmSetBevelCorners NOT successful ************\n"));
+  }
+
+  MYPRINTF(_T("\n\n******************** Start TestSmRemoveFilletNurbsPlanes ************\n"));
+
+  stat = TestSmRemoveFilletNurbsPlanes();
+  iCnt++;
+
+  if (stat == SM_SUCCESS) {
+      nSuccessFul++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmRemoveFilletNurbsPlanes Successful ************\n"));
+  }
+  else {
+      nFailed++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmRemoveFilletNurbsPlanes NOT successful ************\n"));
   }
 
   MYPRINTF(_T("\n\n\n\n*************** Start TestSmGeneral ************\n"));
@@ -892,6 +960,20 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
   else {
       nFailed++;
       smos_WriteBuffer(_T("\n\n******************** End TestSmPrincipalDirectionPairing NOT successful ************\n"));
+  }
+
+  MYPRINTF(_T("\n\n******************** Start TestSmProjectedCurveRotationAxes ************\n"));
+
+  stat = TestSmProjectedCurveRotationAxes();
+  iCnt++;
+
+  if (stat == SM_SUCCESS) {
+      nSuccessFul++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmProjectedCurveRotationAxes Successful ************\n"));
+  }
+  else {
+      nFailed++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmProjectedCurveRotationAxes NOT successful ************\n"));
   }
 
   MYPRINTF(_T("\n\n******************** Start TestSmConeSTEPCrossDerivative ************\n"));
@@ -990,6 +1072,20 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
       smos_WriteBuffer(_T("\n\n******************** End TestSmCurveSweepFailureCleanup NOT successful ************\n"));
   }
 
+  MYPRINTF(_T("\n\n******************** Start TestSmSeamCurveOwnership ************\n"));
+
+  stat = TestSmSeamCurveOwnership();
+  iCnt++;
+
+  if (stat == SM_SUCCESS) {
+      nSuccessFul++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmSeamCurveOwnership Successful ************\n"));
+  }
+  else {
+      nFailed++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmSeamCurveOwnership NOT successful ************\n"));
+  }
+
   MYPRINTF(_T("\n\n******************** Start TestSmRotate ************\n"));
 
   stat = TestSmRotate();
@@ -1033,6 +1129,21 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
   }
 
   MYPRINTF(_T("\n\n\n\n*************** Start TestSmHeal ************\n"));
+
+  MYPRINTF(_T("\n\n******************** Start TestSmHealVoxelGrowItems ************\n"));
+
+  stat = TestSmHealVoxelGrowItems();
+  iCnt++;
+
+  if (stat == SM_SUCCESS) {
+      nSuccessFul++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmHealVoxelGrowItems Successful ************\n"));
+  }
+  else {
+      nFailed++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmHealVoxelGrowItems NOT successful ************\n"));
+  }
+
   MYPRINTF(_T("\n\n******************** Start TestSmHealBrep ************\n"));
 
   stat = TestSmHealBrep();
@@ -1045,6 +1156,20 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
   else {
       nFailed++;
       smos_WriteBuffer(_T("\n\n******************** End TestSmHealBrep NOT successful ************\n"));
+  }
+
+  MYPRINTF(_T("\n\n******************** Start TestSmHealVoxelCoincidentPairs ************\n"));
+
+  stat = TestSmHealVoxelCoincidentPairs();
+  iCnt++;
+
+  if (stat == SM_SUCCESS) {
+      nSuccessFul++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmHealVoxelCoincidentPairs Successful ************\n"));
+  }
+  else {
+      nFailed++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmHealVoxelCoincidentPairs NOT successful ************\n"));
   }
 
   MYPRINTF(_T("\n\n******************** Start TestSmImportExport ************\n"));
@@ -1308,6 +1433,20 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
       smos_WriteBuffer(_T("\n\n******************** End TestSmCreateLinearSweepCylinder NOT successful ************\n"));
   }
 
+  MYPRINTF(_T("\n\n******************** Start TestSmCreateLinearSweepOblique ************\n"));
+
+  stat = TestSmCreateLinearSweepOblique();
+  iCnt++;
+
+  if (stat == SM_SUCCESS) {
+      nSuccessFul++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmCreateLinearSweepOblique Successful ************\n"));
+  }
+  else {
+      nFailed++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmCreateLinearSweepOblique NOT successful ************\n"));
+  }
+
   MYPRINTF(_T("\n\n******************** Start TestSmCreateDraftSweep ************\n"));
 
 
@@ -1321,6 +1460,20 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
   else {
       nFailed++;
       smos_WriteBuffer(_T("\n\n******************** End TestSmCreateDraftSweep NOT successful ************\n"));
+  }
+
+  MYPRINTF(_T("\n\n******************** Start TestSmCreateLinearSweepRepeatedCapped ************\n"));
+
+  stat = TestSmCreateLinearSweepRepeatedCapped();
+  iCnt++;
+
+  if (stat == SM_SUCCESS) {
+      nSuccessFul++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmCreateLinearSweepRepeatedCapped Successful ************\n"));
+  }
+  else {
+      nFailed++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmCreateLinearSweepRepeatedCapped NOT successful ************\n"));
   }
 
   MYPRINTF(_T("\n\n******************** Start TestSmCreateSwungPrimitive ************\n"));
@@ -1560,6 +1713,20 @@ SmStatus run_sm_api(SmBoolean bDoGraphics)
   else {
       nFailed++;
       smos_WriteBuffer(_T("\n\n******************** End TestSmCreateSkinSurface NOT successful ************\n"));
+  }
+
+  MYPRINTF(_T("\n\n******************** Start TestSmReverseUnclampedSurface ************\n"));
+
+  stat = TestSmReverseUnclampedSurface();
+  iCnt++;
+
+  if (stat == SM_SUCCESS) {
+      nSuccessFul++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmReverseUnclampedSurface Successful ************\n"));
+  }
+  else {
+      nFailed++;
+      smos_WriteBuffer(_T("\n\n******************** End TestSmReverseUnclampedSurface NOT successful ************\n"));
   }
 
   // TestSmTrimmedSurface
