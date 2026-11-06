@@ -67,7 +67,7 @@ SmApiStatus SmApiChamferFillet
 
   SmFilletExecutive sFilExec( *pContext, pBrep );
   sFilExec.SetSelfIntersectionHandler( &sSIH );
-  sFilExec.SetDoGlobalMerge( TRUE );
+  SmBoolean bAllBlendEdgesClosed = TRUE;
 
   SmTArray<SmEdge*> sEdges;
   pBrep->GetEdges( sEdges );
@@ -80,12 +80,20 @@ SmApiStatus SmApiChamferFillet
     if(pEU == NULL)
       continue;
 
+    if (!pE->IsClosed())
+      bAllBlendEdgesClosed = FALSE;
+
     pFS = new (*pContext) SmConstantDistanceFS( *pContext, pBrep->GetTolerance(), 30.0*SM_PI / 180.0, 2.0*SM_PI / 180.0, dDistance, pEU );
 
     pFS->SetFilletSurfaceGenerator( &sFSGLinear );
 
     sFilExec.LoadFilletSolver( pFS );
   }
+
+  // Closed blend edges already have their rails inserted into the adjacent
+  // faces. Re-intersecting the periodic rails can lose their edge pairings
+  // and let the trim propagate across the retained face.
+  sFilExec.SetDoGlobalMerge( !bAllBlendEdgesClosed );
 
   SER( sFilExec.CreateFilletCorners() );
 
@@ -96,6 +104,9 @@ SmApiStatus SmApiChamferFillet
   }
 
   SER( sFilExec.DoFilleting() );
+
+  // Reorient cavity faces after the chamfer topology has been merged.
+  pBrep->StitchAndOrient();
 
 #ifdef SM_ASSERT_VALID
   SM_ASSERT_VALID( pBrep );
